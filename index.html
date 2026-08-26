@@ -15,12 +15,8 @@
         #engineStatus { font-size: 13px; color: #ff9500; margin-top: 10px; font-weight: bold; }
     </style>
     
-    <!-- 🟢 MODULE 2B: Injecting the Production-Grade HuggingFace Transformers Engine -->
-    <script type="module">
-        import { pipeline } from 'https://jsdelivr.net';
-        window.hfPipeline = pipeline;
-        console.log("Neural Architecture Booted Successfully.");
-    </script>
+    <!-- 🟢 FIX: Load the stable production global bundle instead of a raw module script -->
+    <script src="https://unpkg.com"></script>
 </head>
 <body>
 
@@ -50,7 +46,6 @@
         let translatorModel = null;
         let isListening = false;
 
-        // Module 2A Rule Matrix
         const localDictionary = {
             "hola": "hello",
             "buenos dias": "good morning",
@@ -60,16 +55,25 @@
             "gracias": "thank you"
         };
 
-        // 🧠 Asynchronously fetch and cache the 40MB translation network layout
         async function loadNeuralNetwork() {
-            if (typeof window.hfPipeline === 'undefined') {
-                setTimeout(loadNeuralNetwork, 500); // Retry loop if browser thread is warm
+            // Check if the global bundle from the script tag is available
+            const hf = window.transformers;
+            if (!hf) {
+                setTimeout(loadNeuralNetwork, 500); 
                 return;
             }
+
             engineStatus.innerText = "Downloading Local AI Engine (~40MB)... Stay on page.";
             try {
-                // Initialize the highly optimized translation pipeline model payload
-                translatorModel = await window.hfPipeline('translation', 'Xenova/opus-mt-es-en');
+                // 🟢 FIX: Explicitly disable WebGPU and multithreaded WASM pools to prevent iOS Safari from crashing/stalling
+                hf.env.backends.onnx.wasm.numThreads = 1;
+                hf.env.allowLocalModels = false;
+
+                // Load the translation network onto the safe, stable CPU execution loop
+                translatorModel = await hf.pipeline('translation', 'Xenova/opus-mt-es-en', {
+                    device: 'wasm'
+                });
+
                 engineStatus.innerText = "Neural AI Model Ready 100% Offline!";
                 engineStatus.style.color = "#00875a";
             } catch (err) {
@@ -83,7 +87,6 @@
             setTimeout(loadNeuralNetwork, 1000);
         });
 
-        // Speech Audio Node Controls
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
 
@@ -131,20 +134,16 @@
             if (!isListening) { recognition.start(); } else { recognition.stop(); }
         }
 
-        // 🧠 The Smart Router Matrix
         async function processHybridEngine(inputText) {
             let translatedText = "";
             const cleanLookupText = inputText.toLowerCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
 
-            // 1. Hit the instant dictionary layer
             if (localDictionary[cleanLookupText]) {
                 translatedText = localDictionary[cleanLookupText];
                 engineStatus.innerText = "Instant Dictionary Match!";
-            } 
-            // 2. Hit the internal AI model layer for custom sentences
-            else if (translatorModel) {
+            } else if (translatorModel) {
                 engineStatus.innerText = "Computing Neural Matrices on CPU...";
                 try {
                     const output = await translatorModel(inputText);
@@ -158,15 +157,12 @@
                     translatedText = "[Local AI Processing Crash]";
                 }
                 engineStatus.innerText = "Neural AI Model Ready 100% Offline!";
-            } 
-            // 3. System core fallback state
-            else {
+            } else {
                 translatedText = "[AI Engine Loading... Use simple dictionary phrases]";
             }
 
             outputBox.innerText = translatedText;
 
-            // System Voice Loopback Engine Execution Node
             const utterance = new SpeechSynthesisUtterance(translatedText);
             utterance.lang = 'en-US';
             window.speechSynthesis.speak(utterance);
