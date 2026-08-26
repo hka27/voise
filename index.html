@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hybrid AI Offline Translator</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 20px; background: #f5f5f7; color: #1d1d1f; }
+        .card { max-width: 400px; margin: 30px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+        button { background: #0071e3; color: white; border: none; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 12px; cursor: pointer; transition: background 0.2s; width: 100%; margin-bottom: 10px; }
+        button:active { background: #005bb5; }
+        .listening { background: #ff453a !important; }
+        .box { margin-top: 20px; padding: 15px; border-radius: 10px; background: #f5f5f7; min-height: 50px; font-size: 18px; text-align: left; }
+        .label { font-size: 12px; color: #86868b; text-transform: uppercase; font-weight: 600; text-align: left; margin-bottom: 5px; }
+        #engineStatus { font-size: 13px; color: #00875a; margin-top: 10px; font-weight: bold; }
+    </style>
+    <!-- MODULE 2B: Import Transformers.js directly via CDN -->
+    <script type="module">
+        import { pipeline } from 'https://jsdelivr.net';
+        window.aiPipeline = pipeline; // Expose pipeline globally for our script
+    </script>
+</head>
+<body>
+
+    <h1>Hybrid AI Translator</h1>
+    <div id="engineStatus">Initializing Systems...</div>
+
+    <div class="card">
+        <button id="actionBtn" onclick="toggleListening()">Start Listening</button>
+        
+        <div style="margin-top: 25px;">
+            <div class="label">Heard Speech (Input)</div>
+            <div id="inputBox" class="box">Spoken words will appear here...</div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <div class="label">Translated Output (Audio Loopback)</div>
+            <div id="outputBox" class="box">Translated text will appear here...</div>
+        </div>
+    </div>
+
+    <script>
+        const engineStatus = document.getElementById('engineStatus');
+        const actionBtn = document.getElementById('actionBtn');
+        const inputBox = document.getElementById('inputBox');
+        const outputBox = document.getElementById('outputBox');
+        
+        let translatorModel = null;
+        let isListening = false;
+
+        // -------------------------------------------------------------
+        // MODULE 2A: The Local Dictionary Matrix (Hardcoded High-Speed Rules)
+        // -------------------------------------------------------------
+        const localDictionary = {
+            "hola": "hello",
+            "buenos días": "good morning",
+            "dónde está el baño": "where is the bathroom",
+            "ayuda": "help",
+            "cuánto cuesta": "how much does it cost",
+            "gracias": "thank you"
+        };
+
+        // -------------------------------------------------------------
+        // MODULE 2B: Transformers.js Loading Routine
+        // -------------------------------------------------------------
+        async function initNeuralEngine() {
+            engineStatus.innerText = "Downloading Local Neural Model (~75MB)... Please wait.";
+            try {
+                // Load an ultra-lightweight translation model (Spanish to English)
+                // This downloads once and saves permanently to Safari's local cache memory.
+                translatorModel = await window.aiPipeline('translation', 'Xenova/marjan-marian-en-es'); 
+                engineStatus.innerText = "Neural AI Model Ready Offline!";
+            } catch (error) {
+                console.error("Neural model failed, falling back purely to local dictionary:", error);
+                engineStatus.innerText = "Neural Error. Using Dictionary Mode Only.";
+            }
+        }
+
+        // Trigger the asynchronous background model download on page load
+        window.addEventListener('load', () => {
+            setTimeout(initNeuralEngine, 1000); // Give the CDN script a brief second to register
+        });
+
+        // -------------------------------------------------------------
+        // MODULE 1: Voice Capture & Engine Integration Loop
+        // -------------------------------------------------------------
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'es-ES'; // Set target spoken language (Spanish input)
+
+        function toggleListening() {
+            if (!isListening) { recognition.start(); } else { recognition.stop(); }
+        }
+
+        recognition.onstart = () => {
+            isListening = true;
+            actionBtn.innerText = "Stop Listening";
+            actionBtn.classList.add('listening');
+            inputBox.innerText = "Listening for speech...";
+        };
+
+        recognition.onend = () => {
+            isListening = false;
+            actionBtn.innerText = "Start Listening";
+            actionBtn.classList.remove('listening');
+        };
+
+        recognition.onresult = (event) => {
+            let finalTranscript = '';
+            let interimTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) { finalTranscript += event.results[i].transcript; }
+                else { interimTranscript += event.results[i].transcript; }
+            }
+            inputBox.innerText = finalTranscript || interimTranscript;
+            
+            if (finalTranscript) {
+                processHybridTranslation(finalTranscript.trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,""));
+            }
+        };
+
+        // -------------------------------------------------------------
+        // THE HYBRID LOGIC ROUTER
+        // -------------------------------------------------------------
+        async function processHybridTranslation(cleanText) {
+            let translatedText = "";
+
+            // Step 1: Check Module 2A (Dictionary Matrix Lookup)
+            if (localDictionary[cleanText]) {
+                translatedText = localDictionary[cleanText];
+                engineStatus.innerText = "Translated via High-Speed Dictionary Matrix!";
+            } 
+            // Step 2: Fall back to Module 2B if model is ready and phrase is unstructured
+            else if (translatorModel) {
+                engineStatus.innerText = "Processing via Local Neural Network...";
+                const result = await translatorModel(cleanText, { src_lang: 'es', tgt_lang: 'en' });
+                translatedText = result[0].translation_text;
+                engineStatus.innerText = "Neural AI Model Ready Offline!";
+            } 
+            // Step 3: Default fallback if no networks or entries match
+            else {
+                translatedText = cleanText; 
+                engineStatus.innerText = "No translation available yet. Syncing raw text.";
+            }
+
+            // Update UI Output Display
+            outputBox.innerText = translatedText;
+
+            // Trigger On-Device Local Text-To-Speech Playback
+            const utterance = new SpeechSynthesisUtterance(translatedText);
+            utterance.lang = 'en-US'; // Play audio back in English voice
+            window.speechSynthesis.speak(utterance);
+        }
+    </script>
+</body>
+</html>
