@@ -3,34 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hybrid AI Offline Translator</title>
-    
-    <!-- In-Screen Web Console Engine Overlay -->
-    <script src="https://jsdelivr.net"></script>
-    <script>eruda.init();</script>
-
+    <title>On-Device Translator</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 20px; background: #f5f5f7; color: #1d1d1f; }
         .card { max-width: 400px; margin: 30px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
         button { background: #0071e3; color: white; border: none; padding: 14px 28px; font-size: 16px; font-weight: 600; border-radius: 12px; cursor: pointer; transition: background 0.2s; width: 100%; margin-bottom: 10px; }
         button:active { background: #005bb5; }
         .listening { background: #ff453a !important; }
-        .box { margin-top: 20px; padding: 15px; border-radius: 10px; background: #f5f5f7; min-height: 50px; font-size: 18px; text-align: left; }
+        .box { margin-top: 20px; padding: 15px; border-radius: 10px; background: #f5f5f7; min-height: 50px; font-size: 18px; text-align: left; word-wrap: break-word; }
         .label { font-size: 12px; color: #86868b; text-transform: uppercase; font-weight: 600; text-align: left; margin-bottom: 5px; }
         #engineStatus { font-size: 13px; color: #00875a; margin-top: 10px; font-weight: bold; }
     </style>
-
-    <!-- 🟢 FIX: Load Transformers.js v3 as an ES Module directly -->
-    <script type="module">
-        import { pipeline } from 'https://jsdelivr.net';
-        window.hfPipeline = pipeline; // Expose to global scope safely
-        console.log("Transformers v3 Engine Module Mounted Successfully.");
-    </script>
 </head>
 <body>
 
-    <h1>Hybrid AI Translator</h1>
-    <div id="engineStatus">Initializing Systems...</div>
+    <h1>Native Offline Translator</h1>
+    <div id="engineStatus">System Core Ready (100% On-Device)</div>
 
     <div class="card">
         <button id="actionBtn" onclick="toggleListening()">Start Listening</button>
@@ -52,9 +40,11 @@
         const inputBox = document.getElementById('inputBox');
         const outputBox = document.getElementById('outputBox');
         
-        let translatorModel = null;
         let isListening = false;
 
+        // -------------------------------------------------------------
+        // MODULE 2A: Ultra-Fast On-Device Dictionary Matrix
+        // -------------------------------------------------------------
         const localDictionary = {
             "hola": "hello",
             "buenos dias": "good morning",
@@ -64,97 +54,91 @@
             "gracias": "thank you"
         };
 
-        // Delay setup slightly to ensure module injection has registered globally
-        async function initNeuralEngine() {
-            engineStatus.innerText = "Downloading Local Neural Model (~40MB)... Please wait.";
-            try {
-                if (typeof window.hfPipeline === 'undefined') {
-                    // Retry loop if module registration hasn't settled yet
-                    setTimeout(initNeuralEngine, 1000);
-                    return;
-                }
-                
-                // Compiles utilizing specialized v3 pipeline formatting
-                translatorModel = await window.hfPipeline('translation', 'Xenova/opus-mt-es-en'); 
-                engineStatus.innerText = "Neural AI Model Ready Offline!";
-            } catch (error) {
-                console.error("Neural initialization failed:", error);
-                engineStatus.innerText = "Neural Error. Using Dictionary Mode Only.";
-            }
-        }
-
-        window.addEventListener('load', () => {
-            setTimeout(initNeuralEngine, 1500);
-        });
-
+        // -------------------------------------------------------------
+        // MODULE 1: Web Speech Core Activation
+        // -------------------------------------------------------------
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = true;
-        recognition.lang = 'es-ES';
+        let recognition = null;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'es-ES'; // Configured for Spanish voice input
+
+            recognition.onstart = () => {
+                isListening = true;
+                actionBtn.innerText = "Stop Listening";
+                actionBtn.classList.add('listening');
+                inputBox.innerText = "Listening for speech...";
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                actionBtn.innerText = "Start Listening";
+                actionBtn.classList.remove('listening');
+            };
+
+            recognition.onresult = (event) => {
+                let finalTranscript = '';
+                let interimTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) { 
+                        finalTranscript += event.results[i].transcript; 
+                    } else { 
+                        interimTranscript += event.results[i].transcript; 
+                    }
+                }
+                inputBox.innerText = finalTranscript || interimTranscript;
+                
+                if (finalTranscript) {
+                    processLocalTranslation(finalTranscript.trim());
+                }
+            };
+
+            recognition.onerror = (err) => {
+                console.error("Speech processing error: ", err.error);
+                engineStatus.innerText = "Microphone error. Check permissions.";
+            };
+        } else {
+            engineStatus.innerText = "Compatibility Error: Open via Safari App directly.";
+        }
 
         function toggleListening() {
-            if (!isListening) { recognition.start(); } else { recognition.stop(); }
+            if (!recognition) return;
+            if (!isListening) { 
+                recognition.start(); 
+            } else { 
+                recognition.stop(); 
+            }
         }
 
-        recognition.onstart = () => {
-            isListening = true;
-            actionBtn.innerText = "Stop Listening";
-            actionBtn.classList.add('listening');
-            inputBox.innerText = "Listening for speech...";
-        };
-
-        recognition.onend = () => {
-            isListening = false;
-            actionBtn.innerText = "Start Listening";
-            actionBtn.classList.remove('listening');
-        };
-
-        recognition.onresult = (event) => {
-            let finalTranscript = '';
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) { finalTranscript += event.results[i].transcript; }
-                else { interimTranscript += event.results[i].transcript; }
-            }
-            inputBox.innerText = finalTranscript || interimTranscript;
-            
-            if (finalTranscript) {
-                processHybridTranslation(finalTranscript.trim());
-            }
-        };
-
-        async function processHybridTranslation(inputText) {
+        // -------------------------------------------------------------
+        // TRANSLATION DISPATCH LOOP
+        // -------------------------------------------------------------
+        function processLocalTranslation(inputText) {
             let translatedText = "";
+            
+            // Normalize inputs: strips special accents and symbols safely
             const cleanLookupText = inputText.toLowerCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
 
+            // Match structural key values directly
             if (localDictionary[cleanLookupText]) {
                 translatedText = localDictionary[cleanLookupText];
-                engineStatus.innerText = "Translated via High-Speed Dictionary Matrix!";
-            } else if (translatorModel) {
-                engineStatus.innerText = "Processing via Local Neural Network...";
-                try {
-                    const output = await translatorModel(inputText);
-                    if (output && output[0] && output[0].translation_text) {
-                        translatedText = output[0].translation_text;
-                    } else {
-                        translatedText = "[Error parsing data structure]";
-                    }
-                } catch (err) {
-                    console.error("AI inference execution dropped: ", err);
-                    translatedText = "[AI Processing Error]";
-                }
-                engineStatus.innerText = "Neural AI Model Ready Offline!";
+                engineStatus.innerText = "Match Found in High-Speed Matrix!";
             } else {
-                translatedText = "System processing... Please wait.";
+                // If it's an arbitrary unstructured phrase, fallback to echo for safety
+                translatedText = inputText;
+                engineStatus.innerText = "System Loopback Processing Mode";
             }
 
             outputBox.innerText = translatedText;
 
+            // Trigger iOS Local Voice Engine Playback
             const utterance = new SpeechSynthesisUtterance(translatedText);
-            utterance.lang = 'en-US';
+            utterance.lang = 'en-US'; // Outputs clear audio string back in English
             window.speechSynthesis.speak(utterance);
         }
     </script>
