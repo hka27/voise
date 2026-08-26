@@ -42,9 +42,6 @@
         
         let isListening = false;
 
-        // -------------------------------------------------------------
-        // MODULE 2A: Ultra-Fast On-Device Dictionary Matrix
-        // -------------------------------------------------------------
         const localDictionary = {
             "hola": "hello",
             "buenos dias": "good morning",
@@ -54,9 +51,6 @@
             "gracias": "thank you"
         };
 
-        // -------------------------------------------------------------
-        // MODULE 1: Web Speech Core Activation
-        // -------------------------------------------------------------
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
 
@@ -64,7 +58,7 @@
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.lang = 'es-ES'; // Configured for Spanish voice input
+            recognition.lang = 'es-ES'; // Set for Spanish input
 
             recognition.onstart = () => {
                 isListening = true;
@@ -83,18 +77,23 @@
                 let finalTranscript = '';
                 let interimTranscript = '';
                 
-                // 🟢 FIXED: Added the proper [0] index array accessor to pull real text strings
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) { 
-                        finalTranscript += event.results[i][0].transcript; 
-                    } else { 
-                        interimTranscript += event.results[i][0].transcript; 
+                    // 🟢 FIX: Added [0] index to cleanly open Apple's speech transcript slice
+                    if (event.results[i] && event.results[i][0]) {
+                        const transcriptText = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) { 
+                            finalTranscript += transcriptText; 
+                        } else { 
+                            interimTranscript += transcriptText; 
+                        }
                     }
                 }
                 
-                inputBox.innerText = finalTranscript || interimTranscript;
+                // Fallback verification rule to clear any stray undefined bugs
+                const displayResult = finalTranscript || interimTranscript;
+                inputBox.innerText = displayResult ? displayResult : "Processing audio...";
                 
-                if (finalTranscript) {
+                if (finalTranscript.trim()) {
                     processLocalTranslation(finalTranscript.trim());
                 }
             };
@@ -116,32 +115,25 @@
             }
         }
 
-        // -------------------------------------------------------------
-        // TRANSLATION DISPATCH LOOP
-        // -------------------------------------------------------------
         function processLocalTranslation(inputText) {
             let translatedText = "";
             
-            // Normalize inputs: strips special accents and symbols safely
             const cleanLookupText = inputText.toLowerCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
 
-            // Match structural key values directly
             if (localDictionary[cleanLookupText]) {
                 translatedText = localDictionary[cleanLookupText];
                 engineStatus.innerText = "Match Found in High-Speed Matrix!";
             } else {
-                // If it's an arbitrary unstructured phrase, fallback to echo loop back mode
                 translatedText = inputText;
                 engineStatus.innerText = "System Loopback Processing Mode";
             }
 
             outputBox.innerText = translatedText;
 
-            // Trigger iOS Local Voice Engine Playback
             const utterance = new SpeechSynthesisUtterance(translatedText);
-            utterance.lang = 'en-US'; // Outputs clear audio string back in English
+            utterance.lang = 'en-US';
             window.speechSynthesis.speak(utterance);
         }
     </script>
