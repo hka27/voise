@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hybrid AI Offline Translator</title>
     
-    <!-- 🟢 THIS INJECTS AN ON-SCREEN CONSOLE FOR IPHONE -->
+    <!-- In-Screen Web Console Engine Overlay -->
     <script src="https://jsdelivr.net"></script>
     <script>eruda.init();</script>
 
@@ -19,8 +19,13 @@
         .label { font-size: 12px; color: #86868b; text-transform: uppercase; font-weight: 600; text-align: left; margin-bottom: 5px; }
         #engineStatus { font-size: 13px; color: #00875a; margin-top: 10px; font-weight: bold; }
     </style>
-    <!-- Transformers CDN -->
-    <script src="https://jsdelivr.net"></script>
+
+    <!-- 🟢 FIX: Load Transformers.js v3 as an ES Module directly -->
+    <script type="module">
+        import { pipeline } from 'https://jsdelivr.net';
+        window.hfPipeline = pipeline; // Expose to global scope safely
+        console.log("Transformers v3 Engine Module Mounted Successfully.");
+    </script>
 </head>
 <body>
 
@@ -59,14 +64,18 @@
             "gracias": "thank you"
         };
 
+        // Delay setup slightly to ensure module injection has registered globally
         async function initNeuralEngine() {
             engineStatus.innerText = "Downloading Local Neural Model (~40MB)... Please wait.";
             try {
-                // Check if the script loaded properly into the global browser scope
-                if (typeof transformers === 'undefined') {
-                    throw new Error("Transformers CDN script failed to parse or load.");
+                if (typeof window.hfPipeline === 'undefined') {
+                    // Retry loop if module registration hasn't settled yet
+                    setTimeout(initNeuralEngine, 1000);
+                    return;
                 }
-                translatorModel = await transformers.pipeline('translation', 'Xenova/opus-mt-es-en'); 
+                
+                // Compiles utilizing specialized v3 pipeline formatting
+                translatorModel = await window.hfPipeline('translation', 'Xenova/opus-mt-es-en'); 
                 engineStatus.innerText = "Neural AI Model Ready Offline!";
             } catch (error) {
                 console.error("Neural initialization failed:", error);
@@ -74,7 +83,9 @@
             }
         }
 
-        window.addEventListener('load', initNeuralEngine);
+        window.addEventListener('load', () => {
+            setTimeout(initNeuralEngine, 1500);
+        });
 
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
@@ -129,11 +140,11 @@
                     if (output && output[0] && output[0].translation_text) {
                         translatedText = output[0].translation_text;
                     } else {
-                        translatedText = "[Error processing translation payload]";
+                        translatedText = "[Error parsing data structure]";
                     }
                 } catch (err) {
-                    console.error("AI inference error: ", err);
-                    translatedText = "[AI processing failed]";
+                    console.error("AI inference execution dropped: ", err);
+                    translatedText = "[AI Processing Error]";
                 }
                 engineStatus.innerText = "Neural AI Model Ready Offline!";
             } else {
