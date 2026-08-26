@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hybrid AI Offline Translator</title>
+    
+    <!-- 🟢 THIS INJECTS AN ON-SCREEN CONSOLE FOR IPHONE -->
+    <script src="https://jsdelivr.net"></script>
+    <script>eruda.init();</script>
+
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 20px; background: #f5f5f7; color: #1d1d1f; }
         .card { max-width: 400px; margin: 30px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
@@ -14,7 +19,7 @@
         .label { font-size: 12px; color: #86868b; text-transform: uppercase; font-weight: 600; text-align: left; margin-bottom: 5px; }
         #engineStatus { font-size: 13px; color: #00875a; margin-top: 10px; font-weight: bold; }
     </style>
-    <!-- Use standard global script tag for clean browser execution -->
+    <!-- Transformers CDN -->
     <script src="https://jsdelivr.net"></script>
 </head>
 <body>
@@ -45,9 +50,6 @@
         let translatorModel = null;
         let isListening = false;
 
-        // -------------------------------------------------------------
-        // MODULE 2A: High-Speed Local Dictionary
-        // -------------------------------------------------------------
         const localDictionary = {
             "hola": "hello",
             "buenos dias": "good morning",
@@ -57,13 +59,13 @@
             "gracias": "thank you"
         };
 
-        // -------------------------------------------------------------
-        // MODULE 2B: Transformers.js Setup
-        // -------------------------------------------------------------
         async function initNeuralEngine() {
             engineStatus.innerText = "Downloading Local Neural Model (~40MB)... Please wait.";
             try {
-                // Using the exact, officially verified path for Spanish-to-English translation
+                // Check if the script loaded properly into the global browser scope
+                if (typeof transformers === 'undefined') {
+                    throw new Error("Transformers CDN script failed to parse or load.");
+                }
                 translatorModel = await transformers.pipeline('translation', 'Xenova/opus-mt-es-en'); 
                 engineStatus.innerText = "Neural AI Model Ready Offline!";
             } catch (error) {
@@ -72,17 +74,13 @@
             }
         }
 
-        // Initialize engine on window load
         window.addEventListener('load', initNeuralEngine);
 
-        // -------------------------------------------------------------
-        // MODULE 1: Audio Core Capture Setup
-        // -------------------------------------------------------------
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'es-ES'; // Listening for Spanish input
+        recognition.lang = 'es-ES';
 
         function toggleListening() {
             if (!isListening) { recognition.start(); } else { recognition.stop(); }
@@ -115,28 +113,19 @@
             }
         };
 
-        // -------------------------------------------------------------
-        // FIXED DATA INTEGRATION PIPELINE
-        // -------------------------------------------------------------
         async function processHybridTranslation(inputText) {
             let translatedText = "";
-            
-            // Clean string strictly for dictionary match (remove accents/punctuation)
             const cleanLookupText = inputText.toLowerCase()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Strip Spanish accents
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
 
-            // 1. Evaluate Dictionary Matrix First
             if (localDictionary[cleanLookupText]) {
                 translatedText = localDictionary[cleanLookupText];
                 engineStatus.innerText = "Translated via High-Speed Dictionary Matrix!";
-            } 
-            // 2. Evaluate Transformers.js Neural Model Fallback
-            else if (translatorModel) {
+            } else if (translatorModel) {
                 engineStatus.innerText = "Processing via Local Neural Network...";
                 try {
                     const output = await translatorModel(inputText);
-                    // Safely extract text from the pipeline array output array structure
                     if (output && output[0] && output[0].translation_text) {
                         translatedText = output[0].translation_text;
                     } else {
@@ -147,18 +136,14 @@
                     translatedText = "[AI processing failed]";
                 }
                 engineStatus.innerText = "Neural AI Model Ready Offline!";
-            } 
-            // 3. Fallback state
-            else {
+            } else {
                 translatedText = "System processing... Please wait.";
             }
 
-            // Update user view interface safe strings
             outputBox.innerText = translatedText;
 
-            // Trigger Local Text-To-Speech audio output stream
             const utterance = new SpeechSynthesisUtterance(translatedText);
-            utterance.lang = 'en-US'; // Speak response back in English
+            utterance.lang = 'en-US';
             window.speechSynthesis.speak(utterance);
         }
     </script>
