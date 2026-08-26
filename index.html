@@ -82,13 +82,16 @@
             recognition.onresult = (event) => {
                 let finalTranscript = '';
                 let interimTranscript = '';
+                
+                // 🟢 FIXED: Added the proper [0] index array accessor to pull real text strings
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     if (event.results[i].isFinal) { 
-                        finalTranscript += event.results[i].transcript; 
+                        finalTranscript += event.results[i][0].transcript; 
                     } else { 
-                        interimTranscript += event.results[i].transcript; 
+                        interimTranscript += event.results[i][0].transcript; 
                     }
                 }
+                
                 inputBox.innerText = finalTranscript || interimTranscript;
                 
                 if (finalTranscript) {
@@ -129,7 +132,7 @@
                 translatedText = localDictionary[cleanLookupText];
                 engineStatus.innerText = "Match Found in High-Speed Matrix!";
             } else {
-                // If it's an arbitrary unstructured phrase, fallback to echo for safety
+                // If it's an arbitrary unstructured phrase, fallback to echo loop back mode
                 translatedText = inputText;
                 engineStatus.innerText = "System Loopback Processing Mode";
             }
