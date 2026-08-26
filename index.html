@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>On-Device Translator</title>
+    <title>Hybrid AI Offline Translator</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; text-align: center; padding: 20px; background: #f5f5f7; color: #1d1d1f; }
         .card { max-width: 400px; margin: 30px auto; background: white; padding: 30px; border-radius: 20px; box-shadow: 0 8px 24px rgba(0,0,0,0.05); }
@@ -12,13 +12,20 @@
         .listening { background: #ff453a !important; }
         .box { margin-top: 20px; padding: 15px; border-radius: 10px; background: #f5f5f7; min-height: 50px; font-size: 18px; text-align: left; word-wrap: break-word; }
         .label { font-size: 12px; color: #86868b; text-transform: uppercase; font-weight: 600; text-align: left; margin-bottom: 5px; }
-        #engineStatus { font-size: 13px; color: #00875a; margin-top: 10px; font-weight: bold; }
+        #engineStatus { font-size: 13px; color: #ff9500; margin-top: 10px; font-weight: bold; }
     </style>
+    
+    <!-- 🟢 MODULE 2B: Injecting the Production-Grade HuggingFace Transformers Engine -->
+    <script type="module">
+        import { pipeline } from 'https://jsdelivr.net';
+        window.hfPipeline = pipeline;
+        console.log("Neural Architecture Booted Successfully.");
+    </script>
 </head>
 <body>
 
-    <h1>Native Offline Translator</h1>
-    <div id="engineStatus">System Core Ready (100% On-Device)</div>
+    <h1>Hybrid AI Translator</h1>
+    <div id="engineStatus">Booting Core Memory Modules...</div>
 
     <div class="card">
         <button id="actionBtn" onclick="toggleListening()">Start Listening</button>
@@ -40,8 +47,10 @@
         const inputBox = document.getElementById('inputBox');
         const outputBox = document.getElementById('outputBox');
         
+        let translatorModel = null;
         let isListening = false;
 
+        // Module 2A Rule Matrix
         const localDictionary = {
             "hola": "hello",
             "buenos dias": "good morning",
@@ -51,6 +60,30 @@
             "gracias": "thank you"
         };
 
+        // 🧠 Asynchronously fetch and cache the 40MB translation network layout
+        async function loadNeuralNetwork() {
+            if (typeof window.hfPipeline === 'undefined') {
+                setTimeout(loadNeuralNetwork, 500); // Retry loop if browser thread is warm
+                return;
+            }
+            engineStatus.innerText = "Downloading Local AI Engine (~40MB)... Stay on page.";
+            try {
+                // Initialize the highly optimized translation pipeline model payload
+                translatorModel = await window.hfPipeline('translation', 'Xenova/opus-mt-es-en');
+                engineStatus.innerText = "Neural AI Model Ready 100% Offline!";
+                engineStatus.style.color = "#00875a";
+            } catch (err) {
+                console.error("AI Allocation Interrupted: ", err);
+                engineStatus.innerText = "Offline Engine Error. Using Dictionary Mode.";
+                engineStatus.style.color = "#ff3b30";
+            }
+        }
+
+        window.addEventListener('load', () => {
+            setTimeout(loadNeuralNetwork, 1000);
+        });
+
+        // Speech Audio Node Controls
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
 
@@ -58,7 +91,7 @@
             recognition = new SpeechRecognition();
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.lang = 'es-ES'; // Set for Spanish input
+            recognition.lang = 'es-ES';
 
             recognition.onstart = () => {
                 isListening = true;
@@ -78,60 +111,62 @@
                 let interimTranscript = '';
                 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    // 🟢 FIX: Added [0] index to cleanly open Apple's speech transcript slice
                     if (event.results[i] && event.results[i][0]) {
                         const transcriptText = event.results[i][0].transcript;
-                        if (event.results[i].isFinal) { 
-                            finalTranscript += transcriptText; 
-                        } else { 
-                            interimTranscript += transcriptText; 
-                        }
+                        if (event.results[i].isFinal) { finalTranscript += transcriptText; }
+                        else { interimTranscript += transcriptText; }
                     }
                 }
                 
-                // Fallback verification rule to clear any stray undefined bugs
-                const displayResult = finalTranscript || interimTranscript;
-                inputBox.innerText = displayResult ? displayResult : "Processing audio...";
+                inputBox.innerText = finalTranscript || interimTranscript;
                 
                 if (finalTranscript.trim()) {
-                    processLocalTranslation(finalTranscript.trim());
+                    processHybridEngine(finalTranscript.trim());
                 }
             };
-
-            recognition.onerror = (err) => {
-                console.error("Speech processing error: ", err.error);
-                engineStatus.innerText = "Microphone error. Check permissions.";
-            };
-        } else {
-            engineStatus.innerText = "Compatibility Error: Open via Safari App directly.";
         }
 
         function toggleListening() {
             if (!recognition) return;
-            if (!isListening) { 
-                recognition.start(); 
-            } else { 
-                recognition.stop(); 
-            }
+            if (!isListening) { recognition.start(); } else { recognition.stop(); }
         }
 
-        function processLocalTranslation(inputText) {
+        // 🧠 The Smart Router Matrix
+        async function processHybridEngine(inputText) {
             let translatedText = "";
-            
             const cleanLookupText = inputText.toLowerCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
 
+            // 1. Hit the instant dictionary layer
             if (localDictionary[cleanLookupText]) {
                 translatedText = localDictionary[cleanLookupText];
-                engineStatus.innerText = "Match Found in High-Speed Matrix!";
-            } else {
-                translatedText = inputText;
-                engineStatus.innerText = "System Loopback Processing Mode";
+                engineStatus.innerText = "Instant Dictionary Match!";
+            } 
+            // 2. Hit the internal AI model layer for custom sentences
+            else if (translatorModel) {
+                engineStatus.innerText = "Computing Neural Matrices on CPU...";
+                try {
+                    const output = await translatorModel(inputText);
+                    if (output && output[0] && output[0].translation_text) {
+                        translatedText = output[0].translation_text;
+                    } else {
+                        translatedText = "[Data translation payload missing format]";
+                    }
+                } catch (aiErr) {
+                    console.error("Inference structural crash: ", aiErr);
+                    translatedText = "[Local AI Processing Crash]";
+                }
+                engineStatus.innerText = "Neural AI Model Ready 100% Offline!";
+            } 
+            // 3. System core fallback state
+            else {
+                translatedText = "[AI Engine Loading... Use simple dictionary phrases]";
             }
 
             outputBox.innerText = translatedText;
 
+            // System Voice Loopback Engine Execution Node
             const utterance = new SpeechSynthesisUtterance(translatedText);
             utterance.lang = 'en-US';
             window.speechSynthesis.speak(utterance);
