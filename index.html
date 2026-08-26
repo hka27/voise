@@ -14,11 +14,8 @@
         .label { font-size: 12px; color: #86868b; text-transform: uppercase; font-weight: 600; text-align: left; margin-bottom: 5px; }
         #engineStatus { font-size: 13px; color: #00875a; margin-top: 10px; font-weight: bold; }
     </style>
-    <!-- MODULE 2B: Import Transformers.js directly via CDN -->
-    <script type="module">
-        import { pipeline } from 'https://jsdelivr.net';
-        window.aiPipeline = pipeline; // Expose pipeline globally for our script
-    </script>
+    <!-- Use standard global script tag for clean browser execution -->
+    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
 
@@ -49,46 +46,43 @@
         let isListening = false;
 
         // -------------------------------------------------------------
-        // MODULE 2A: The Local Dictionary Matrix (Hardcoded High-Speed Rules)
+        // MODULE 2A: High-Speed Local Dictionary
         // -------------------------------------------------------------
         const localDictionary = {
             "hola": "hello",
-            "buenos días": "good morning",
-            "dónde está el baño": "where is the bathroom",
+            "buenos dias": "good morning",
+            "donde esta el bano": "where is the bathroom",
             "ayuda": "help",
-            "cuánto cuesta": "how much does it cost",
+            "cuanto cuesta": "how much does it cost",
             "gracias": "thank you"
         };
 
         // -------------------------------------------------------------
-        // MODULE 2B: Transformers.js Loading Routine
+        // MODULE 2B: Transformers.js Setup
         // -------------------------------------------------------------
         async function initNeuralEngine() {
-            engineStatus.innerText = "Downloading Local Neural Model (~75MB)... Please wait.";
+            engineStatus.innerText = "Downloading Local Neural Model (~40MB)... Please wait.";
             try {
-                // Load an ultra-lightweight translation model (Spanish to English)
-                // This downloads once and saves permanently to Safari's local cache memory.
-                translatorModel = await window.aiPipeline('translation', 'Xenova/marjan-marian-en-es'); 
+                // Using the exact, officially verified path for Spanish-to-English translation
+                translatorModel = await transformers.pipeline('translation', 'Xenova/opus-mt-es-en'); 
                 engineStatus.innerText = "Neural AI Model Ready Offline!";
             } catch (error) {
-                console.error("Neural model failed, falling back purely to local dictionary:", error);
+                console.error("Neural initialization failed:", error);
                 engineStatus.innerText = "Neural Error. Using Dictionary Mode Only.";
             }
         }
 
-        // Trigger the asynchronous background model download on page load
-        window.addEventListener('load', () => {
-            setTimeout(initNeuralEngine, 1000); // Give the CDN script a brief second to register
-        });
+        // Initialize engine on window load
+        window.addEventListener('load', initNeuralEngine);
 
         // -------------------------------------------------------------
-        // MODULE 1: Voice Capture & Engine Integration Loop
+        // MODULE 1: Audio Core Capture Setup
         // -------------------------------------------------------------
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'es-ES'; // Set target spoken language (Spanish input)
+        recognition.lang = 'es-ES'; // Listening for Spanish input
 
         function toggleListening() {
             if (!isListening) { recognition.start(); } else { recognition.stop(); }
@@ -117,40 +111,54 @@
             inputBox.innerText = finalTranscript || interimTranscript;
             
             if (finalTranscript) {
-                processHybridTranslation(finalTranscript.trim().toLowerCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,""));
+                processHybridTranslation(finalTranscript.trim());
             }
         };
 
         // -------------------------------------------------------------
-        // THE HYBRID LOGIC ROUTER
+        // FIXED DATA INTEGRATION PIPELINE
         // -------------------------------------------------------------
-        async function processHybridTranslation(cleanText) {
+        async function processHybridTranslation(inputText) {
             let translatedText = "";
+            
+            // Clean string strictly for dictionary match (remove accents/punctuation)
+            const cleanLookupText = inputText.toLowerCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Strip Spanish accents
+                .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").trim();
 
-            // Step 1: Check Module 2A (Dictionary Matrix Lookup)
-            if (localDictionary[cleanText]) {
-                translatedText = localDictionary[cleanText];
+            // 1. Evaluate Dictionary Matrix First
+            if (localDictionary[cleanLookupText]) {
+                translatedText = localDictionary[cleanLookupText];
                 engineStatus.innerText = "Translated via High-Speed Dictionary Matrix!";
             } 
-            // Step 2: Fall back to Module 2B if model is ready and phrase is unstructured
+            // 2. Evaluate Transformers.js Neural Model Fallback
             else if (translatorModel) {
                 engineStatus.innerText = "Processing via Local Neural Network...";
-                const result = await translatorModel(cleanText, { src_lang: 'es', tgt_lang: 'en' });
-                translatedText = result[0].translation_text;
+                try {
+                    const output = await translatorModel(inputText);
+                    // Safely extract text from the pipeline array output array structure
+                    if (output && output[0] && output[0].translation_text) {
+                        translatedText = output[0].translation_text;
+                    } else {
+                        translatedText = "[Error processing translation payload]";
+                    }
+                } catch (err) {
+                    console.error("AI inference error: ", err);
+                    translatedText = "[AI processing failed]";
+                }
                 engineStatus.innerText = "Neural AI Model Ready Offline!";
             } 
-            // Step 3: Default fallback if no networks or entries match
+            // 3. Fallback state
             else {
-                translatedText = cleanText; 
-                engineStatus.innerText = "No translation available yet. Syncing raw text.";
+                translatedText = "System processing... Please wait.";
             }
 
-            // Update UI Output Display
+            // Update user view interface safe strings
             outputBox.innerText = translatedText;
 
-            // Trigger On-Device Local Text-To-Speech Playback
+            // Trigger Local Text-To-Speech audio output stream
             const utterance = new SpeechSynthesisUtterance(translatedText);
-            utterance.lang = 'en-US'; // Play audio back in English voice
+            utterance.lang = 'en-US'; // Speak response back in English
             window.speechSynthesis.speak(utterance);
         }
     </script>
